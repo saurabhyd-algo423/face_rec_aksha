@@ -54,7 +54,7 @@ class Config:
     VISITOR_REID_THRESHOLD = float(os.environ.get("VISITOR_REID_THRESHOLD", "0.35"))
     API_PORT = int(os.environ.get("API_PORT", "8000"))
     API_HOST = os.environ.get("API_HOST", "0.0.0.0")
-    API_TOKEN = os.environ.get("API_TOKEN", "")
+    API_TOKEN = os.environ.get("API_TOKEN", "1234")
     PROCESS_FPS = int(os.environ.get("PROCESS_FPS", "10"))
     MONITOR_API = os.environ.get("MONITOR_API", "http://node_backend:5000/api/monitor/")
 

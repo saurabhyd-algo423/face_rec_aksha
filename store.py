@@ -5,16 +5,18 @@ Routes reads/writes to either MongoDB (production) or local JSONL files
 config settings.  Also provides a Kafka-based ``FaceEventsPublisher``
 for streaming events and alerts.
 """
+import datetime as dt
 import json
 import os
 import threading
 import uuid
 
 import pymongo
-from kafka import KafkaProducer
+# from kafka import KafkaProducer
 
 from config import config
 from localstore import (
+    local_alerts,
     local_attendance_logs,
     local_face_events,
     local_known_faces,
@@ -40,31 +42,37 @@ def get_database():
 def known_faces_collection():
     if config.is_local:
         return local_known_faces()
-    return get_database()["known_faces"]
+    return get_database()["face_rec_known_faces"]
 
 
 def face_events_collection():
     if config.is_local:
         return local_face_events()
-    return get_database()["face_events"]
+    return get_database()["face_rec_face_events"]
 
 
 def attendance_logs_collection():
     if config.is_local:
         return local_attendance_logs()
-    return get_database()["attendance_logs"]
+    return get_database()["face_rec_attendance_logs"]
 
 
 def visitor_logs_collection():
     if config.is_local:
         return local_visitor_logs()
-    return get_database()["visitor_logs"]
+    return get_database()["face_rec_visitor_logs"]
 
 
 def visitor_counts_collection():
     if config.is_local:
         return local_visitor_counts()
-    return get_database()["visitor_counts"]
+    return get_database()["face_rec_visitor_counts"]
+
+
+def alerts_collection():
+    if config.is_local:
+        return local_alerts()
+    return get_database()["face_rec_alerts"]
 
 
 def ensure_indexes():
@@ -80,6 +88,8 @@ def ensure_indexes():
     face_events_collection().create_index([("camera_id", 1), ("ts", -1)])
     face_events_collection().create_index([("event_id", 1)], unique=True)
     attendance_logs_collection().create_index([("staff_id", 1), ("date", 1)], unique=True)
+    alerts_collection().create_index([("camera_id", 1), ("ts", -1)])
+    alerts_collection().create_index([("alert_id", 1)], unique=True)
 
 
 def load_database(camera_name):
@@ -91,7 +101,7 @@ def load_database(camera_name):
     try:
         if config.is_local:
             return get_local_store().collection(f"facemeta_{camera_name}")
-        return get_database()[f"facemeta_{camera_name}"]
+        return get_database()[f"face_rec_facemeta_{camera_name}"]
     except Exception as e:
         print(f"Error connecting to MongoDB: {e}")
         return None
@@ -116,6 +126,7 @@ class FaceEventsPublisher:
 
     def _get_producer(self):
         if self._producer is None:
+            from kafka import KafkaProducer  # lazy import here
             self._producer = KafkaProducer(
                 bootstrap_servers=[config.kafka_servers()],
                 value_serializer=lambda v: json.dumps(v).encode('utf-8'),
@@ -156,6 +167,15 @@ class FaceEventsPublisher:
             "source": "face",
             "meta": meta or {},
         }
+        # Save to MongoDB
+        if not config.is_local_sink:
+            try:
+                doc = dict(alert)
+                doc["ts"] = dt.datetime.fromisoformat(doc["ts"])
+                alerts_collection().insert_one(doc)
+            except Exception as e:
+                print(f"Alerts DB error: {e}")
+        # Publish to Kafka / local file
         if config.is_local_sink:
             self._write_local("alerts", alert)
             return alert["alert_id"]

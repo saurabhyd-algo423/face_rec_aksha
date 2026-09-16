@@ -5,6 +5,7 @@ Contains the enrollment pipelines (video, images, RTSP), the
 supporting utilities for attendance tracking, event publishing,
 visitor Re-ID, and snapshot management.
 """
+import collections
 import datetime as dt
 import json
 import os

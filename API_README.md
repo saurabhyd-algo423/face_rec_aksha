@@ -215,6 +215,96 @@ Keepalive pings every 30s:
 
 ---
 
+### Start Live Recognition
+```
+POST /api/recognize/start
+Content-Type: application/json
+```
+```json
+{
+  "rtsp_url": "rtsp://user:pass@ip:port/stream",
+  "camera_id": "gate_cam",
+  "site_id": "site_default",
+  "thresh": 0.7,
+  "cooldown": 2.5,
+  "roi": false,
+  "roi_x1": 0.35,
+  "roi_y1": 0.15,
+  "roi_x2": 0.65,
+  "roi_y2": 0.6
+}
+```
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `rtsp_url` | string | yes | - | RTSP stream URL |
+| `camera_id` | string | no | `gate_cam` | Camera identifier |
+| `site_id` | string | no | config default | Site identifier |
+| `thresh` | float | no | `0.7` | Similarity threshold |
+| `cooldown` | float | no | `2.5` | Rematch cooldown (sec) |
+| `roi` | bool | no | `false` | Enable ROI visitor counting |
+| `roi_x1` | float | no | - | ROI top-left X (0-1) |
+| `roi_y1` | float | no | - | ROI top-left Y (0-1) |
+| `roi_x2` | float | no | - | ROI bottom-right X (0-1) |
+| `roi_y2` | float | no | - | ROI bottom-right Y (0-1) |
+
+**Response (201):**
+```json
+{
+  "task_id": "task_abc123",
+  "camera_id": "gate_cam",
+  "rtsp_url": "rtsp://...",
+  "status": "running",
+  "started_at": "2026-09-09T10:30:00+00:00"
+}
+```
+
+**Errors:**
+- `409` - Already running on this camera
+
+---
+
+### Stop Live Recognition
+```
+POST /api/recognize/stop
+Content-Type: application/json
+```
+```json
+{ "camera_id": "gate_cam" }
+```
+
+**Response:**
+```json
+{ "camera_id": "gate_cam", "status": "stopping" }
+```
+
+**Error:** `404` if not running.
+
+---
+
+### Recognition Status
+```
+GET /api/recognize/status
+```
+**Response:**
+```json
+{
+  "active_streams": [
+    {
+      "task_id": "task_abc123",
+      "camera_id": "gate_cam",
+      "rtsp_url": "rtsp://...",
+      "status": "running",
+      "started_at": "2026-09-09T10:30:00+00:00",
+      "frames_processed": 1500,
+      "matched": 45,
+      "unknown": 12
+    }
+  ]
+}
+```
+
+---
+
 ## Environment Variables
 
 | Variable | Default | Description |

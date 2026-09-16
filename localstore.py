@@ -248,20 +248,24 @@ def get_local_store():
 
 
 def local_known_faces():
-    return _local.collection("known_faces")
+    return _local.collection("face_rec_known_faces")
 
 
 def local_face_events():
-    return _local.collection("face_events")
+    return _local.collection("face_rec_face_events")
 
 
 def local_attendance_logs():
-    return _local.collection("attendance_logs")
+    return _local.collection("face_rec_attendance_logs")
 
 
 def local_visitor_logs():
-    return _local.collection("visitor_logs")
+    return _local.collection("face_rec_visitor_logs")
 
 
 def local_visitor_counts():
-    return _local.collection("visitor_counts")
+    return _local.collection("face_rec_visitor_counts")
+
+
+def local_alerts():
+    return _local.collection("face_rec_alerts")
