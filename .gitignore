@@ -8,3 +8,5 @@ __pycache__/
 .idea/
 .vscode/
 *.log
+faces_media/
+gate_cam/

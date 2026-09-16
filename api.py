@@ -20,13 +20,14 @@ import os
 import threading
 import time
 import uuid
+from typing import Optional
 
 import cv2
 from fastapi import FastAPI, Depends, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi import UploadFile, File, Form
 from pymongo import ASCENDING, DESCENDING
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from config import config
 from models import FACE_INDEX, build_index_from_db
@@ -217,8 +218,8 @@ class RecognitionManager:
     def start(self, rtsp_url, camera_id=None, site_id=None,
               thresh=0.7, cooldown=2.5, roi=False,
               roi_x1=None, roi_y1=None, roi_x2=None, roi_y2=None):
-        camera_id = camera_id or config.GATE_CAM
-        site_id = site_id or config.SITE_ID
+        camera_id = camera_id if camera_id else config.GATE_CAM
+        site_id = site_id if site_id else config.SITE_ID
 
         with self._lock:
             if camera_id in self._tasks and self._tasks[camera_id]["status"] == "running":
@@ -237,6 +238,7 @@ class RecognitionManager:
                 "matched": 0,
                 "unknown": 0,
                 "stop_event": stop_event,
+                "error": None,
             }
             self._tasks[camera_id] = state
 
@@ -270,8 +272,10 @@ class RecognitionManager:
         try:
             os.environ["SIMILARITY_THRESHOLD"] = str(thresh)
             os.environ["REMATCH_COOLDOWN_SEC"] = str(cooldown)
-            os.environ["STORE_BACKEND"] = "mongo"
-            os.environ["OUTPUT_SINK"] = "kafka"
+            if not os.environ.get("STORE_BACKEND"):
+                os.environ["STORE_BACKEND"] = "mongo"
+            if not os.environ.get("OUTPUT_SINK"):
+                os.environ["OUTPUT_SINK"] = "kafka"
 
             if roi:
                 os.environ["ROI_ENABLED"] = "true"
@@ -285,9 +289,11 @@ class RecognitionManager:
 
             cap = cv2.VideoCapture(rtsp_url)
             if not cap.isOpened():
-                print(f"[{camera_id}] ERROR: Cannot connect to {rtsp_url}")
+                error_msg = f"Cannot connect to {rtsp_url}"
+                print(f"[{camera_id}] ERROR: {error_msg}")
                 with self._lock:
                     self._tasks[camera_id]["status"] = "failed"
+                    self._tasks[camera_id]["error"] = error_msg
                 return
 
             fps = cap.get(cv2.CAP_PROP_FPS) or 25.0
@@ -333,10 +339,14 @@ class RecognitionManager:
             print(f"[{camera_id}] Stopped. Processed {frame_idx} frames.")
 
         except Exception as e:
-            print(f"[{camera_id}] Recognition error: {e}")
+            error_msg = str(e)
+            print(f"[{camera_id}] Recognition error: {error_msg}")
+            import traceback
+            traceback.print_exc()
             with self._lock:
                 if camera_id in self._tasks:
                     self._tasks[camera_id]["status"] = "failed"
+                    self._tasks[camera_id]["error"] = error_msg
 
 
 recognition_manager = RecognitionManager()
@@ -348,15 +358,22 @@ recognition_manager = RecognitionManager()
 
 class RecognizeStartRequest(BaseModel):
     rtsp_url: str
-    camera_id: str = None
-    site_id: str = None
+    camera_id: Optional[str] = None
+    site_id: Optional[str] = None
     thresh: float = 0.7
     cooldown: float = 2.5
     roi: bool = False
-    roi_x1: float = None
-    roi_y1: float = None
-    roi_x2: float = None
-    roi_y2: float = None
+    roi_x1: Optional[float] = None
+    roi_y1: Optional[float] = None
+    roi_x2: Optional[float] = None
+    roi_y2: Optional[float] = None
+
+    @field_validator("camera_id", "site_id", mode="before")
+    @classmethod
+    def _strip_swagger_placeholder(cls, v):
+        if isinstance(v, str) and v.strip().lower() in ("", "string"):
+            return None
+        return v
 
 
 class RecognizeStopRequest(BaseModel):
